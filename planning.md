@@ -65,21 +65,14 @@ Given one selected listing and the user's wardrobe, picks complementary wardrobe
 
 <!-- Describe the return value -->
 
-A dict:
-
-{
-"new_item": <the listing dict passed in>,
-"pieces": [ <wardrobe item dicts chosen to complete the outfit> ],
-"styling_note": "str — one or two sentences on how to wear it",
-"complete": bool # True if real wardrobe pieces were used, False for generic fallback
-}
+A non-empty str containing 1–2 outfit suggestions. When the wardrobe has items, the string names specific wardrobe pieces to pair with the new item plus a short styling tip per outfit. When the wardrobe is empty, it gives general styling advice for the item instead. Pairings favor wardrobe pieces sharing the most style_tags/colors with new_item. Never returns an empty string.
 Pieces are chosen by determining which categories complete the outfit relative to new_item.category (e.g. a top needs bottoms + shoes, optionally outerwear/accessories), then selecting wardrobe items in those categories that share the most style_tags/colors with new_item.
 
 **What happens if it fails or returns nothing:**
 
 <!-- What should the agent do if the wardrobe is empty or no outfit can be suggested? -->
 
-If wardrobe["items"] is empty, it cannot pull real pieces. It returns pieces=[], complete=False, and a styling_note with generic pairing advice based only on new_item's style. The planning loop flags that the suggestion is generic and tells the user it can personalize once a wardrobe is added.
+If wardrobe["items"] is empty, it returns general styling advice (based only on new_item's style) as a string rather than failing. If the LLM call errors, it returns a short fallback string so the agent never crashes or returns "". The planning loop flags that an empty-wardrobe suggestion is generic and tells the user it can personalize once a wardrobe is added.
 
 ---
 
@@ -95,7 +88,7 @@ Generates a short, casual, Instagram-caption-style description of the full outfi
 
 <!-- List each parameter, its type, and what it represents -->
 
-- `outfit` (...): the dict returned by suggest_outfit (new_item, pieces, styling_note, complete).
+- `outfit` (str): the outfit-suggestion string returned by suggest_outfit.
 - `new_item` (dict): the selected listing, so the caption can reference price, platform, and the item itself.
 
 **What it returns:**
@@ -108,7 +101,7 @@ A str — one short caption (roughly 1–2 sentences, emoji allowed) referencing
 
 <!-- What should the agent do if the outfit data is incomplete? -->
 
-If outfit is missing or complete=False, it builds the caption from new_item alone (title, price, platform). If the LLM call errors or returns an empty string, it falls back to a deterministic template, e.g. f"thrifted this {new_item['title']} off {new_item['platform']} for ${new_item['price']} ✨", so the agent always returns something shareable.
+If outfit is empty or whitespace-only, it returns a descriptive message string telling the user to run suggest_outfit first (does not raise). If the LLM call errors or returns an empty string, it falls back to a deterministic template, e.g. f"thrifted this {new_item['title']} off {new_item['platform']} for ${new_item['price']} ✨", so the agent always returns something shareable.
 
 ---
 
@@ -145,9 +138,8 @@ The loop runs once per query and selects the next tool based on what the previou
    session["all_results"] = results
 
 3. Call suggest_outfit(session["selected_item"], wardrobe).
-   session["outfit"] = the returned dict.
-
-   IF outfit["complete"] == False: # empty/minimal wardrobe
+   session["outfit"] = the returned string.
+   IF wardrobe["items"] is empty: # suggestion will be generic
    session["note"] = "Gave generic styling — add wardrobe items for a personalized look."
 
    # continue either way
@@ -174,7 +166,7 @@ A single session dict is created at the start of each query and passed by refere
 | filters (dict: description, size, max_price) | query parser | search_listings                      |
 | all_results (list[dict])                     | step 2       | display / fallback                   |
 | selected_item (dict)                         | step 2       | suggest_outfit, create_fit_card      |
-| outfit (dict)                                | step 3       | create_fit_card, final output        |
+| outfit (str)                                 | step 3       | create_fit_card, final output        |
 | fit_card (str)                               | step 4       | final output                         |
 | error (str or None)                          | any step     | controls early return + final output |
 | note (str or None)                           | step 3       | final output                         |
