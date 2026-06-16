@@ -13,7 +13,6 @@ but check your terminal — the port may differ).
 """
 
 import gradio as gr
-
 from agent import run_agent
 from utils.data_loader import get_example_wardrobe, get_empty_wardrobe
 
@@ -43,8 +42,44 @@ def handle_query(user_query: str, wardrobe_choice: str) -> tuple[str, str, str]:
            string and return it along with session["outfit_suggestion"] and
            session["fit_card"].
     """
-    # TODO: implement this function
-    return "Agent not yet implemented.", "", ""
+    # 1. Guard against an empty query.
+    if not user_query or not user_query.strip():
+        return (
+            "Please enter what you're looking for "
+            "(e.g. 'vintage graphic tee under $30, size M').",
+            "",
+            "",
+        )
+
+    # 2. Pick the wardrobe based on the radio choice.
+    if wardrobe_choice == "Example wardrobe":
+        wardrobe = get_example_wardrobe()
+    else:
+        wardrobe = get_empty_wardrobe()
+
+    # 3. Run the planning loop.
+    session = run_agent(user_query, wardrobe)
+
+    # 4. Error path: show the message in panel 1, leave the others empty.
+    if session["error"]:
+        return f"⚠️ {session['error']}", "", ""
+
+    # 5. Success: format the selected listing and return all three panels.
+    item = session["selected_item"]
+    listing_text = (
+        f"{item['title']}\n"
+        f"${item['price']:.0f} · {item['condition']} · {item['platform']}\n"
+        f"Style: {', '.join(item['style_tags'])}\n"
+        f"Colors: {', '.join(item['colors'])}"
+    )
+
+    outfit_text = session["outfit_suggestion"]
+    if session.get("note"):
+        outfit_text += f"\n\n({session['note']})"
+
+    fit_card_text = session["fit_card"]
+
+    return listing_text, outfit_text, fit_card_text
 
 
 # ── interface ─────────────────────────────────────────────────────────────────
@@ -56,6 +91,7 @@ EXAMPLE_QUERIES = [
     "black combat boots size 8",
     "designer ballgown size XXS under $5",   # deliberate no-results test
 ]
+
 
 def build_interface():
     with gr.Blocks(title="FitFindr") as demo:
